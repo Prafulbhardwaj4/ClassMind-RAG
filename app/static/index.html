@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClassMind — AI Teacher Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()">
+            <span id="toggle-icon">☰</span>
+        </button>
+
+        <div class="sidebar-content">
+
+            <div class="sidebar-section-label">Upload</div>
+            <div class="sidebar-item upload-trigger" onclick="triggerUpload()">
+                <span class="sidebar-icon">⬆️</span>
+                <span class="sidebar-text">Upload PDF</span>
+            </div>
+            <input type="file" id="pdf-input" accept=".pdf" onchange="uploadPDF(this)">
+
+            <div class="sidebar-section-label">Library</div>
+            <div class="sidebar-item" onclick="showComingSoon('My Documents')">
+                <span class="sidebar-icon">🗂️</span>
+                <span class="sidebar-text">My Documents</span>
+            </div>
+
+            <div class="sidebar-bottom">
+                <div class="sidebar-item" onclick="showComingSoon('Settings')">
+                    <span class="sidebar-icon">⚙️</span>
+                    <span class="sidebar-text">Settings</span>
+                </div>
+                <div class="sidebar-item logout" onclick="showComingSoon('Logout')">
+                    <span class="sidebar-icon">🚪</span>
+                    <span class="sidebar-text">Log Out</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main" id="main">
+        <div class="topbar">
+            <div class="topbar-left">
+                <span class="topbar-brand">🎓 ClassMind</span>
+                <span class="topbar-sub">AI-Powered · Any Board · Any Subject</span>
+            </div>
+        </div>
+
+        <div class="hero">
+            <h1>What do you need today?</h1>
+            <p>Upload any textbook or notes, then generate lesson plans, quizzes, and explanations — grounded in your actual documents.</p>
+        </div>
+
+        <div class="container">
+            <div class="input-card">
+                <textarea id="query" placeholder="Ask anything — e.g. Generate a lesson plan for Chapter 6, or Create 10 quiz questions from the uploaded document..." rows="4"></textarea>
+                <div class="input-footer">
+                    <span class="hint">Ctrl + Enter to submit</span>
+                    <button id="submit-btn" onclick="askClassMind()">Ask ClassMind →</button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading hidden">
+                <div class="loading-inner">
+                    <div class="spinner"></div>
+                    <p id="loading-text">Searching your documents...</p>
+                </div>
+            </div>
+
+            <div id="result" class="result hidden">
+                <div class="result-header">
+                    <span class="result-badge">✅ Response ready</span>
+                    <button class="copy-btn" onclick="copyAnswer()">📋 Copy</button>
+                </div>
+                <div class="answer-card">
+                    <div id="answer"></div>
+                </div>
+                <div class="sources-section">
+                    <h3>📚 Sources</h3>
+                    <div id="sources" class="sources-grid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Coming Soon Popup -->
+    <div class="popup-overlay" id="popup-overlay" onclick="closePopup()">
+        <div class="popup" onclick="event.stopPropagation()">
+            <div class="popup-icon">🚧</div>
+            <h2>Coming Soon</h2>
+            <p id="popup-feature-name"></p>
+            <p class="popup-sub">We're building this feature. Stay tuned!</p>
+            <button class="popup-close-btn" onclick="closePopup()">Got it</button>
+        </div>
+    </div>
+
+    <script>
+        let sidebarOpen = false;
+
+        function toggleSidebar() {
+            sidebarOpen = !sidebarOpen;
+            document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+            document.getElementById('main').classList.toggle('shifted', sidebarOpen);
+            document.getElementById('toggle-icon').textContent = sidebarOpen ? '✕' : '☰';
+        }
+
+        function showComingSoon(feature) {
+            document.getElementById('popup-feature-name').textContent = `"${feature}" is coming soon.`;
+            document.getElementById('popup-overlay').classList.add('active');
+        }
+
+        function closePopup() {
+            document.getElementById('popup-overlay').classList.remove('active');
+        }
+
+        function triggerUpload() {
+            document.getElementById('pdf-input').click();
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        async function uploadPDF(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            showToast('⏳ Indexing your PDF, please wait...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showToast(`✅ "${file.name}" indexed — ready to query!`, 'success');
+                } else {
+                    showToast(`❌ ${data.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('❌ Upload failed. Please try again.', 'error');
+            } finally {
+                input.value = '';
+            }
+        }
+
+        function copyAnswer() {
+            navigator.clipboard.writeText(document.getElementById('answer').innerText);
+            showToast('📋 Copied to clipboard!', 'success');
+        }
+
+        const loadingMessages = [
+            "Searching your documents...",
+            "Retrieving relevant sections...",
+            "Grounding response in content...",
+            "Generating classroom-ready output..."
+        ];
+
+        let loadingInterval;
+        function startLoadingAnimation() {
+            let i = 0;
+            document.getElementById('loading-text').textContent = loadingMessages[0];
+            loadingInterval = setInterval(() => {
+                i = (i + 1) % loadingMessages.length;
+                document.getElementById('loading-text').textContent = loadingMessages[i];
+            }, 1800);
+        }
+
+        async function askClassMind() {
+            const query = document.getElementById('query').value.trim();
+            if (!query) return;
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('result').classList.add('hidden');
+            document.getElementById('submit-btn').disabled = true;
+            startLoadingAnimation();
+
+            try {
+                const response = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+
+                const avgScore = data.sources.reduce((a, s) => a + s.score, 0) / data.sources.length;
+                const existing = document.getElementById('conf-warning');
+                if (existing) existing.remove();
+
+                if (avgScore < 0.45) {
+                    const warn = document.createElement('div');
+                    warn.id = 'conf-warning';
+                    warn.className = 'low-confidence-warning';
+                    warn.innerHTML = `⚠️ Low retrieval confidence (${(avgScore * 100).toFixed(0)}% avg). This topic may not be well covered in the available documents — verify before classroom use.`;
+                    document.getElementById('result').insertBefore(warn, document.querySelector('.answer-card'));
+                }
+
+                document.getElementById('answer').innerHTML = formatAnswer(data.answer);
+                document.getElementById('sources').innerHTML = formatSources(data.sources);
+                document.getElementById('result').classList.remove('hidden');
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+            } catch (err) {
+                document.getElementById('answer').innerHTML = '<p class="error">Something went wrong. Please try again.</p>';
+                document.getElementById('result').classList.remove('hidden');
+            } finally {
+                clearInterval(loadingInterval);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('submit-btn').disabled = false;
+            }
+        }
+
+        function formatAnswer(text) {
+            return text
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/^\* (.+)$/gm, '<li>$1</li>')
+                .replace(/^(\d+)\. (.+)$/gm, '<li><span class="num">$1.</span> $2</li>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function formatSources(sources) {
+            return sources.map(s => `
+                <div class="source-card">
+                    <div class="source-top">
+                        <span class="source-chapter">${s.chapter && s.chapter !== '—' ? 'Ch. ' + s.chapter + ': ' : ''}${s.title ?? 'Document'}</span>
+                        <span class="relevance-badge" style="background:${relevanceColor(s.score)}">
+                            ${(s.score * 100).toFixed(0)}% match
+                        </span>
+                    </div>
+                    <div class="source-bottom">${s.class} ${s.subject} · Pages ${s.pages}</div>
+                </div>
+            `).join('');
+        }
+
+        function relevanceColor(score) {
+            if (score > 0.6) return '#c6f6d5';
+            if (score > 0.4) return '#fefcbf';
+            return '#fed7d7';
+        }
+
+        document.getElementById('query').addEventListener('keydown', e => {
+            if (e.ctrlKey && e.key === 'Enter') askClassMind();
+        });
+    </script>
+</body>
+</html>
