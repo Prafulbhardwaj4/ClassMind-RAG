@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from app.api.routes import router
 from app.rag.pipeline import RAGPipeline
+from app.core.config import settings
 from app.core.logger import get_logger
 from pathlib import Path
 
@@ -14,7 +15,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting ClassMind...")
     if not settings.faiss_index_path.exists() and settings.metadata_path.exists():
         logger.info("Rebuilding FAISS index from metadata...")
-        import json, numpy as np
+        import json
+        import numpy as np
         from app.rag.embedder import Embedder
         from app.rag.vector_store import VectorStore
         embedder = Embedder()
@@ -32,7 +34,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ClassMind",
-    description="AI Teacher Assistant for Indian Schools — NCERT RAG",
+    description="AI Teacher Assistant — RAG Pipeline",
     version="1.0.0",
     lifespan=lifespan
 )
