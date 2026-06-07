@@ -12,9 +12,23 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting ClassMind...")
+    if not settings.faiss_index_path.exists() and settings.metadata_path.exists():
+        logger.info("Rebuilding FAISS index from metadata...")
+        import json, numpy as np
+        from app.rag.embedder import Embedder
+        from app.rag.vector_store import VectorStore
+        embedder = Embedder()
+        with open(settings.metadata_path, encoding="utf-8") as f:
+            chunks = json.load(f)
+        texts = [c["text"] for c in chunks]
+        vectors = embedder.embed(texts)
+        store = VectorStore()
+        store.add(vectors, chunks)
+        store.save()
+        logger.info("FAISS index rebuilt.")
     app.state.pipeline = RAGPipeline()
     yield
-    logger.info("Shutting down ClassMind.")
+    logger.info("Shutting down.")
 
 app = FastAPI(
     title="ClassMind",
